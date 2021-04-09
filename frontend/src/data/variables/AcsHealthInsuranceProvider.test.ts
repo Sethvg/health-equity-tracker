@@ -16,7 +16,14 @@ import {
   CA,
   WA,
 } from "./TestUtils";
-import { WHITE_NH, ASIAN_NH, ALL, RACE } from "../utils/Constants";
+import {
+  WHITE_NH,
+  ASIAN_NH,
+  ALL,
+  RACE,
+  WHITE,
+  TOTAL,
+} from "../utils/Constants";
 import AcsHealthInsuranceProvider from "./AcsHealthInsuranceProvider";
 
 autoInitGlobals();
@@ -103,6 +110,48 @@ function countyRow(
     witout_health_insurance: witout_health_insurance,
     total_health_insurance: total_health_insurance,
   };
+}
+
+function populationRow(
+  stateFips: FipsSpec,
+  breakdownName: string,
+  breakdownValue: string,
+  value: number
+) {
+  return {
+    [breakdownName]: breakdownValue,
+    state_fips: stateFips.code,
+    state_name: stateFips.name,
+    population: value,
+  };
+}
+
+function populationCountyRow(
+  stateFips: FipsSpec,
+  countyFips: FipsSpec,
+  breakdownName: string,
+  breakdownValue: string,
+  value: number
+) {
+  return {
+    [breakdownName]: breakdownValue,
+    state_fips: stateFips.code,
+    state_name: stateFips.name,
+    county_fips: countyFips.code,
+    county_name: countyFips.name,
+    population: value,
+  };
+}
+
+function setPopulationDataset(
+  data: any[],
+  breakdown: "race" | "age" | "sex" = "race",
+  geo: "state" | "county" = "state"
+) {
+  dataFetcher.setFakeDatasetLoaded(
+    `acs_population-by_${breakdown}_${geo}`,
+    data
+  );
 }
 
 const evaluateHealthInsuranceWithAndWithoutTotal = createWithAndWithoutAllEvaluator(
@@ -201,6 +250,35 @@ describe("AcsHealthInsuranceProvider", () => {
       RACE,
       [WA_KC_ASIAN_FINAL, WA_KC_WHITE_FINAL],
       [WA_KC_ASIAN_FINAL, WA_KC_WHITE_FINAL, TOTAL_ROW]
+    );
+  });
+
+  test("Testing totals come from population data", async () => {
+    // Create raw rows with health insurance coverage
+    const rawData = [
+      stateRow(WA, "race", WHITE, "200", "800", "1000"),
+      stateRow(WA, "race", WHITE_NH, "150", "500", "650"),
+    ];
+
+    const populationData = [
+      //Used to verify we throw out races for total only
+      populationRow(WA, RACE, ASIAN_NH, 100000000),
+      populationRow(WA, RACE, TOTAL, 2000),
+    ];
+
+    setPopulationDataset(populationData, "race", "state");
+
+    const NC_WHITE_NH_FINAL = finalRow(NC, RACE, WHITE_NH, 100, 10000);
+    const NC_WHITE_FINAL = finalRow(NC, RACE, WHITE, 250, 50000);
+    const TOTAL_ROW = finalRow(WA, RACE, ALL, 250, 12821);
+
+    await evaluateHealthInsuranceWithAndWithoutTotal(
+      "acs_health_insurance-health_insurance_by_race_county",
+      rawData,
+      Breakdowns.forFips(new Fips("37")),
+      RACE,
+      [NC_WHITE_NH_FINAL, NC_WHITE_FINAL],
+      [NC_WHITE_NH_FINAL, NC_WHITE_FINAL, TOTAL_ROW]
     );
   });
 });
